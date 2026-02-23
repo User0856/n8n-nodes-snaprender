@@ -5,7 +5,7 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeConnectionTypes } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
 export class SnapRender implements INodeType {
 	description: INodeTypeDescription = {
@@ -228,7 +228,7 @@ export class SnapRender implements INodeType {
 							json: true,
 						},
 					);
-					returnData.push({ json: response as IDataObject });
+					returnData.push({ json: response as IDataObject, pairedItem: { item: i } });
 				} else if (operation === 'checkCache') {
 					const url = this.getNodeParameter('url', i) as string;
 					const format = this.getNodeParameter('format', i) as string;
@@ -242,7 +242,7 @@ export class SnapRender implements INodeType {
 							json: true,
 						},
 					);
-					returnData.push({ json: response as IDataObject });
+					returnData.push({ json: response as IDataObject, pairedItem: { item: i } });
 				} else if (operation === 'screenshot') {
 					const url = this.getNodeParameter('url', i) as string;
 					const format = this.getNodeParameter('format', i) as string;
@@ -285,7 +285,7 @@ export class SnapRender implements INodeType {
 								json: true,
 							},
 						);
-						returnData.push({ json: response as IDataObject });
+						returnData.push({ json: response as IDataObject, pairedItem: { item: i } });
 					} else {
 						const response = await this.helpers.httpRequestWithAuthentication.call(
 							this,
@@ -319,14 +319,15 @@ export class SnapRender implements INodeType {
 								success: true,
 							},
 							binary: { data: binaryData },
+							pairedItem: { item: i },
 						});
 					}
 				}
 			} catch (error) {
 				if (this.continueOnFail()) {
-					returnData.push({ json: { error: (error as Error).message } });
+					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 				} else {
-					throw error;
+					throw new NodeApiError(this.getNode(), { message: (error as Error).message });
 				}
 			}
 		}
