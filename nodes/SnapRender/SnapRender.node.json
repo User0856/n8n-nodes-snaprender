@@ -6,12 +6,12 @@
 	"resources": {
 		"credentialDocumentation": [
 			{
-				"url": "https://github.com/User0856/snaprender-integrations/tree/main/n8n#credentials"
+				"url": "https://github.com/User0856/n8n-nodes-snaprender#credentials"
 			}
 		],
 		"primaryDocumentation": [
 			{
-				"url": "https://github.com/User0856/snaprender-integrations/tree/main/n8n#readme"
+				"url": "https://github.com/User0856/n8n-nodes-snaprender#readme"
 			}
 		]
 	}

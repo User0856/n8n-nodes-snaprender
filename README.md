@@ -49,13 +49,13 @@ Get current month's screenshot usage statistics.
 
 ## Free Tier
 
-50 screenshots/month, no credit card required. Paid plans up to 10,000/month.
+500 screenshots/month, no credit card required. Paid plans from $9/month.
 
 ## Links
 
 - [SnapRender Website](https://snap-render.com)
 - [API Documentation](https://app.snap-render.com/docs)
-- [GitHub](https://github.com/User0856/snaprender-integrations/tree/main/n8n)
+- [GitHub](https://github.com/User0856/n8n-nodes-snaprender)
 
 ## License
 
