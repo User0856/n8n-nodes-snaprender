@@ -26,9 +26,6 @@ export class SnapRender implements INodeType {
 				required: true,
 			},
 		],
-		requestDefaults: {
-			baseURL: 'https://app.snap-render.com',
-		},
 		properties: [
 			{
 				displayName: 'Operation',

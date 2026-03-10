@@ -9,6 +9,7 @@ export class SnapRenderApi implements ICredentialType {
 	name = 'snapRenderApi';
 	displayName = 'SnapRender API';
 	documentationUrl = 'https://snap-render.com';
+	icon = 'file:snaprender.png' as const;
 
 	properties: INodeProperties[] = [
 		{
