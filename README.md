@@ -12,7 +12,7 @@ In your n8n instance:
 
 ## Credentials
 
-1. Sign up at [app.snap-render.com](https://app.snap-render.com/auth/signup) — free, no credit card
+1. Sign up at [snap-render.com](https://snap-render.com/auth/signup) — free, no credit card
 2. Create an API key in your dashboard
 3. In n8n, go to **Credentials** > **New** > **SnapRender API**
 4. Paste your API key (starts with `sk_live_`)
@@ -54,7 +54,7 @@ Get current month's screenshot usage statistics.
 ## Links
 
 - [SnapRender Website](https://snap-render.com)
-- [API Documentation](https://app.snap-render.com/docs)
+- [API Documentation](https://snap-render.com/docs)
 - [GitHub](https://github.com/User0856/n8n-nodes-snaprender)
 
 ## License
