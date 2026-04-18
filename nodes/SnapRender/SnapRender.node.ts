@@ -4,6 +4,7 @@ import type {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
+	JsonObject,
 } from 'n8n-workflow';
 import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
@@ -34,58 +35,10 @@ export class SnapRender implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
-						name: 'Take Screenshot',
-						value: 'screenshot',
-						description: 'Capture a screenshot of a website',
-						action: 'Capture a screenshot of a website',
-					},
-					{
-						name: 'Sign URL',
-						value: 'signUrl',
-						description: 'Generate a signed screenshot URL (free, no quota cost)',
-						action: 'Generate a signed screenshot URL',
-					},
-					{
-						name: 'Extract Content',
-						value: 'extract',
-						description: 'Extract content from a web page (markdown, text, HTML, article, links, metadata)',
-						action: 'Extract content from a web page',
-					},
-					{
 						name: 'Batch Screenshots',
 						value: 'batch',
 						description: 'Create a batch screenshot job for multiple URLs (1-50)',
 						action: 'Create a batch screenshot job',
-					},
-					{
-						name: 'Get Batch Status',
-						value: 'getBatchStatus',
-						description: 'Get the status of a batch screenshot job',
-						action: 'Get batch job status',
-					},
-					{
-						name: 'Create Webhook',
-						value: 'createWebhook',
-						description: 'Register a webhook for event notifications',
-						action: 'Create a webhook',
-					},
-					{
-						name: 'List Webhooks',
-						value: 'listWebhooks',
-						description: 'List all webhooks for the account',
-						action: 'List webhooks',
-					},
-					{
-						name: 'Delete Webhook',
-						value: 'deleteWebhook',
-						description: 'Delete a webhook by ID',
-						action: 'Delete a webhook',
-					},
-					{
-						name: 'Test Webhook',
-						value: 'testWebhook',
-						description: 'Send a test delivery to a webhook',
-						action: 'Test a webhook',
 					},
 					{
 						name: 'Check Cache',
@@ -94,10 +47,58 @@ export class SnapRender implements INodeType {
 						action: 'Check if a screenshot is cached',
 					},
 					{
+						name: 'Create Webhook',
+						value: 'createWebhook',
+						description: 'Register a webhook for event notifications',
+						action: 'Create a webhook',
+					},
+					{
+						name: 'Delete Webhook',
+						value: 'deleteWebhook',
+						description: 'Delete a webhook by ID',
+						action: 'Delete a webhook',
+					},
+					{
+						name: 'Extract Content',
+						value: 'extract',
+						description: 'Extract content from a web page (markdown, text, HTML, article, links, metadata)',
+						action: 'Extract content from a web page',
+					},
+					{
+						name: 'Get Batch Status',
+						value: 'getBatchStatus',
+						description: 'Get the status of a batch screenshot job',
+						action: 'Get batch job status',
+					},
+					{
 						name: 'Get Usage',
 						value: 'getUsage',
 						description: 'Get current month screenshot usage statistics',
 						action: 'Get usage statistics',
+					},
+					{
+						name: 'List Webhooks',
+						value: 'listWebhooks',
+						description: 'List all webhooks for the account',
+						action: 'List webhooks',
+					},
+					{
+						name: 'Sign URL',
+						value: 'signUrl',
+						description: 'Generate a signed screenshot URL (free, no quota cost)',
+						action: 'Generate a signed screenshot URL',
+					},
+					{
+						name: 'Take Screenshot',
+						value: 'screenshot',
+						description: 'Capture a screenshot of a website',
+						action: 'Capture a screenshot of a website',
+					},
+					{
+						name: 'Test Webhook',
+						value: 'testWebhook',
+						description: 'Send a test delivery to a webhook',
+						action: 'Test a webhook',
 					},
 				],
 				default: 'screenshot',
@@ -683,7 +684,7 @@ export class SnapRender implements INodeType {
 				if (this.continueOnFail()) {
 					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 				} else {
-					throw new NodeApiError(this.getNode(), { message: (error as Error).message });
+					throw new NodeApiError(this.getNode(), error as JsonObject);
 				}
 			}
 		}

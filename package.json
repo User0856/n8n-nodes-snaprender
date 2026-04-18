@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-snaprender",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "n8n node for SnapRender API: screenshots, content extraction, batch processing, signed URLs, webhooks. PNG, JPEG, WebP, PDF with device emulation, dark mode, ad blocking.",
 	"license": "MIT",
 	"homepage": "https://snap-render.com",

@@ -2,7 +2,7 @@
 	"node": "n8n-nodes-snaprender.snapRender",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": ["Development", "Media"],
+	"categories": ["Development", "Utility"],
 	"resources": {
 		"credentialDocumentation": [
 			{
