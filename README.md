@@ -49,7 +49,7 @@ Get current month's screenshot usage statistics.
 
 ## Free Tier
 
-500 screenshots/month, no credit card required. Paid plans from $9/month.
+200 screenshots/month, no credit card required. Paid plans from $9/month.
 
 ## Links
 
