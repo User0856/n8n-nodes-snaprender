@@ -8,6 +8,45 @@ import type {
 } from 'n8n-workflow';
 import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
+interface SnapRenderApiError {
+	code: string;
+	message: string;
+	status?: number;
+}
+
+/**
+ * Find the SnapRender error body ({ error: { code, message, status } }) inside an n8n HTTP error, so the user sees
+ * "TARGET_UNREACHABLE: The target website could not be reached..." instead of n8n's generic text for the status code.
+ * The body can sit on different properties depending on the n8n version, and it is a Buffer for binary requests.
+ */
+function findApiError(value: unknown, depth = 0, seen = new Set<unknown>()): SnapRenderApiError | undefined {
+	if (value === null || value === undefined || depth > 5 || seen.has(value)) return undefined;
+	if (typeof value === 'string' || value instanceof Uint8Array || value instanceof ArrayBuffer) {
+		const text = typeof value === 'string' ? value : Buffer.from(value as Uint8Array).toString('utf8');
+		if (!text.includes('"error"')) return undefined;
+		try {
+			return findApiError(JSON.parse(text), depth + 1, seen);
+		} catch {
+			return undefined;
+		}
+	}
+	if (typeof value !== 'object') return undefined;
+	seen.add(value);
+	const err = (value as { error?: unknown }).error;
+	if (err && typeof err === 'object') {
+		const { code, message, status } = err as { code?: unknown; message?: unknown; status?: unknown };
+		if (typeof code === 'string' && typeof message === 'string') {
+			return { code, message, status: typeof status === 'number' ? status : undefined };
+		}
+	}
+	for (const key of Object.getOwnPropertyNames(value)) {
+		if (key === 'stack') continue;
+		const found = findApiError((value as Record<string, unknown>)[key], depth + 1, seen);
+		if (found) return found;
+	}
+	return undefined;
+}
+
 export class SnapRender implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'SnapRender',
@@ -681,10 +720,25 @@ export class SnapRender implements INodeType {
 					}
 				}
 			} catch (error) {
+				const apiError = findApiError(error);
+				const message = apiError ? `${apiError.code}: ${apiError.message}` : (error as Error).message;
 				if (this.continueOnFail()) {
-					returnData.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
+					const json: IDataObject = { error: message };
+					if (apiError) {
+						json.errorCode = apiError.code;
+						if (apiError.status) json.httpCode = apiError.status;
+					}
+					returnData.push({ json, pairedItem: { item: i } });
+				} else if (apiError) {
+					// A fresh error from the API body: NodeApiError hands back an already wrapped error unchanged, which
+					// would keep n8n's generic text for the status code.
+					throw new NodeApiError(this.getNode(), { message, code: apiError.code } as JsonObject, {
+						message,
+						httpCode: apiError.status ? String(apiError.status) : undefined,
+						itemIndex: i,
+					});
 				} else {
-					throw new NodeApiError(this.getNode(), error as JsonObject);
+					throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 				}
 			}
 		}
