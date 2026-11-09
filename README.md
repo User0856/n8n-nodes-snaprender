@@ -12,40 +12,53 @@ In your n8n instance:
 
 ## Credentials
 
-1. Sign up at [snap-render.com](https://snap-render.com/auth/signup) — free, no credit card
+1. Sign up at [snap-render.com](https://snap-render.com/auth/signup) (free, no credit card)
 2. Create an API key in your dashboard
 3. In n8n, go to **Credentials** > **New** > **SnapRender API**
 4. Paste your API key (starts with `sk_live_`)
 
 ## Operations
 
-### Take Screenshot
+Operations are grouped by resource.
+
+| Resource | Operations |
+| --- | --- |
+| Screenshot | Take, Sign URL, Check Cache, Create Batch, Get Batch Status |
+| Content | Extract (markdown, plain text, HTML, article, links, metadata) |
+| Webhook | Create, Delete, Get Many, Test |
+| Account | Get Usage |
+
+### Screenshot: Take
 
 Capture any website as PNG, JPEG, WebP, or PDF.
 
-- **URL** — Website to capture
-- **Format** — PNG, JPEG, WebP, or PDF
-- **Full Page** — Capture entire scrollable page
-- **Device** — iPhone 14, iPhone 15 Pro, Pixel 7, iPad Pro, MacBook Pro
-- **Dark Mode** — Enable dark mode CSS emulation
-- **Block Ads** — Remove advertisements
-- **Block Cookie Banners** — Remove cookie consent popups
-- **Output** — Binary (image file) or JSON (base64 data URI)
-- **Additional Options** — Width, height, quality, delay, hide selectors, click selector
+- **URL**: website to capture
+- **Format**: JPEG, PDF, PNG, or WebP
+- **Full Page**: capture the entire scrollable page
+- **Device**: iPad Pro, iPhone 14, iPhone 15 Pro, MacBook Pro, Pixel 7
+- **Dark Mode**: enable dark mode CSS emulation
+- **Block Ads**: remove advertisements
+- **Block Cookie Banners**: remove cookie consent popups
+- **Output**: Binary (image file) or JSON (base64 data URI)
+- **Additional Options**: click selector, delay, height, hide selectors, quality, width
 
-### Check Cache
+### Screenshot: Check Cache
 
 Check if a screenshot is cached without capturing. Free, doesn't count against quota.
 
-### Get Usage
+### Account: Get Usage
 
 Get current month's screenshot usage statistics.
+
+### Workflows built with older versions
+
+Nodes added before version 0.2.6 keep their single Operation list and work unchanged. New nodes use the resource layout above.
 
 ## Example Workflow
 
 1. **Trigger** (e.g., webhook, schedule, form)
-2. **SnapRender** node — Take Screenshot with URL from trigger
-3. **Send Email** / **Save to S3** / **Slack** — Use the binary output
+2. **SnapRender** node: Screenshot > Take with the URL from the trigger
+3. **Send Email** / **Save to S3** / **Slack**: use the binary output
 
 ## Free Tier
 
@@ -60,3 +73,8 @@ Get current month's screenshot usage statistics.
 ## License
 
 MIT
+
+## Changelog
+
+- 0.2.6: operations grouped into Screenshot, Content, Webhook and Account resources (existing workflows unchanged), SVG icons with dark theme variants, alphabetized options, clearer error for invalid batch URL lists
+- 0.2.5: failed requests show SnapRender's own error code and message

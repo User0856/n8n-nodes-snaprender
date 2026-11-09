@@ -6,7 +6,7 @@ import type {
 	INodeTypeDescription,
 	JsonObject,
 } from 'n8n-workflow';
-import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 interface SnapRenderApiError {
 	code: string;
@@ -47,15 +47,76 @@ function findApiError(value: unknown, depth = 0, seen = new Set<unknown>()): Sna
 	return undefined;
 }
 
+/** Version 1 shows one flat Operation list. Saved v1 workflows keep these values unchanged. */
+const showV1 = { '@version': [1] };
+/** Version 2 groups the same operations under resources. */
+const showV2 = { '@version': [{ _cnd: { gte: 2 } }] };
+
+/**
+ * Maps a version 2 resource and operation to the version 1 operation that runs it, so both versions share one
+ * implementation per operation. Version 2 operation values are unique across resources, which lets the shared fields
+ * below show by operation alone.
+ */
+const V2_OPERATIONS: Record<string, Record<string, string>> = {
+	account: { getUsage: 'getUsage' },
+	content: { extract: 'extract' },
+	screenshot: {
+		checkCache: 'checkCache',
+		createBatch: 'batch',
+		getBatch: 'getBatchStatus',
+		sign: 'signUrl',
+		take: 'screenshot',
+	},
+	webhook: {
+		create: 'createWebhook',
+		delete: 'deleteWebhook',
+		getAll: 'listWebhooks',
+		test: 'testWebhook',
+	},
+};
+
+/** Shows a field for the given version 1 operations and the version 2 operations that run them. */
+function forOperations(...v1Operations: string[]): { show: { operation: string[] } } {
+	const operation = [...v1Operations];
+	for (const operations of Object.values(V2_OPERATIONS)) {
+		for (const [v2Operation, v1Operation] of Object.entries(operations)) {
+			if (v1Operations.includes(v1Operation) && !operation.includes(v2Operation)) operation.push(v2Operation);
+		}
+	}
+	return { show: { operation } };
+}
+
+const captureOperations = ['screenshot', 'signUrl', 'batch'];
+
+/**
+ * The version 1 operation name for this item: version 1 reads it directly, version 2 maps resource and operation.
+ */
+function resolveOperation(context: IExecuteFunctions, itemIndex: number): string {
+	const operation = context.getNodeParameter('operation', itemIndex) as string;
+	if (context.getNode().typeVersion < 2) return operation;
+	const resource = context.getNodeParameter('resource', itemIndex) as string;
+	const mapped = V2_OPERATIONS[resource]?.[operation];
+	if (!mapped) {
+		throw new NodeOperationError(
+			context.getNode(),
+			`The operation "${operation}" is not supported for the resource "${resource}"`,
+			{ itemIndex },
+		);
+	}
+	return mapped;
+}
+
 export class SnapRender implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'SnapRender',
 		name: 'snapRender',
-		icon: 'file:snaprender.png',
+		icon: { light: 'file:snaprender.svg', dark: 'file:snaprender-dark.svg' },
 		group: ['transform'],
-		version: 1,
-		subtitle: '={{$parameter["operation"]}}',
-		description: 'Capture website screenshots as PNG, JPEG, WebP, or PDF',
+		version: [1, 2],
+		defaultVersion: 2,
+		subtitle:
+			'={{ $parameter["resource"] ? $parameter["operation"] + ": " + $parameter["resource"] : $parameter["operation"] }}',
+		description: 'Capture website screenshots as PNG, JPEG, WebP, or PDF and extract web page content',
 		defaults: { name: 'SnapRender' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
@@ -67,11 +128,13 @@ export class SnapRender implements INodeType {
 			},
 		],
 		properties: [
+			// --- Version 1: flat operation list (kept for saved workflows) ---
 			{
 				displayName: 'Operation',
 				name: 'operation',
 				type: 'options',
 				noDataExpression: true,
+				displayOptions: { show: { ...showV1 } },
 				options: [
 					{
 						name: 'Batch Screenshots',
@@ -143,7 +206,129 @@ export class SnapRender implements INodeType {
 				default: 'screenshot',
 			},
 
-			// --- Screenshot, Sign, Cache Check params ---
+			// --- Version 2: resources and their operations ---
+			{
+				displayName: 'Resource',
+				name: 'resource',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { ...showV2 } },
+				options: [
+					{ name: 'Account', value: 'account' },
+					{ name: 'Content', value: 'content' },
+					{ name: 'Screenshot', value: 'screenshot' },
+					{ name: 'Webhook', value: 'webhook' },
+				],
+				default: 'screenshot',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { ...showV2, resource: ['account'] } },
+				options: [
+					{
+						name: 'Get Usage',
+						value: 'getUsage',
+						description: 'Get current month screenshot usage statistics',
+						action: 'Get usage statistics',
+					},
+				],
+				default: 'getUsage',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { ...showV2, resource: ['content'] } },
+				options: [
+					{
+						name: 'Extract',
+						value: 'extract',
+						description: 'Extract content from a web page (markdown, text, HTML, article, links, metadata)',
+						action: 'Extract content from a web page',
+					},
+				],
+				default: 'extract',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { ...showV2, resource: ['screenshot'] } },
+				options: [
+					{
+						name: 'Check Cache',
+						value: 'checkCache',
+						description: 'Check if a screenshot is cached (free, no quota cost)',
+						action: 'Check if a screenshot is cached',
+					},
+					{
+						name: 'Create Batch',
+						value: 'createBatch',
+						description: 'Create a batch screenshot job for multiple URLs (1-50)',
+						action: 'Create a batch screenshot job',
+					},
+					{
+						name: 'Get Batch Status',
+						value: 'getBatch',
+						description: 'Get the status of a batch screenshot job',
+						action: 'Get batch job status',
+					},
+					{
+						name: 'Sign URL',
+						value: 'sign',
+						description: 'Generate a signed screenshot URL (free, no quota cost)',
+						action: 'Generate a signed screenshot URL',
+					},
+					{
+						name: 'Take',
+						value: 'take',
+						description: 'Capture a screenshot of a website',
+						action: 'Capture a screenshot of a website',
+					},
+				],
+				default: 'take',
+			},
+			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				displayOptions: { show: { ...showV2, resource: ['webhook'] } },
+				options: [
+					{
+						name: 'Create',
+						value: 'create',
+						description: 'Register a webhook for event notifications',
+						action: 'Create a webhook',
+					},
+					{
+						name: 'Delete',
+						value: 'delete',
+						description: 'Delete a webhook by ID',
+						action: 'Delete a webhook',
+					},
+					{
+						name: 'Get Many',
+						value: 'getAll',
+						description: 'Get many webhooks of the account',
+						action: 'Get many webhooks',
+					},
+					{
+						name: 'Test',
+						value: 'test',
+						description: 'Send a test delivery to a webhook',
+						action: 'Test a webhook',
+					},
+				],
+				default: 'create',
+			},
+
+			// --- Screenshot, Sign, Cache Check, Extract params ---
 			{
 				displayName: 'URL',
 				name: 'url',
@@ -152,25 +337,21 @@ export class SnapRender implements INodeType {
 				required: true,
 				placeholder: 'https://example.com',
 				description: 'URL of the website to capture',
-				displayOptions: {
-					show: { operation: ['screenshot', 'signUrl', 'checkCache', 'extract'] },
-				},
+				displayOptions: forOperations('screenshot', 'signUrl', 'checkCache', 'extract'),
 			},
 			{
 				displayName: 'Format',
 				name: 'format',
 				type: 'options',
 				options: [
-					{ name: 'PNG', value: 'png' },
 					{ name: 'JPEG', value: 'jpeg' },
-					{ name: 'WebP', value: 'webp' },
 					{ name: 'PDF', value: 'pdf' },
+					{ name: 'PNG', value: 'png' },
+					{ name: 'WebP', value: 'webp' },
 				],
 				default: 'png',
 				description: 'Output image format',
-				displayOptions: {
-					show: { operation: ['screenshot', 'signUrl', 'checkCache', 'batch'] },
-				},
+				displayOptions: forOperations('screenshot', 'signUrl', 'checkCache', 'batch'),
 			},
 
 			// --- Sign URL params ---
@@ -181,7 +362,7 @@ export class SnapRender implements INodeType {
 				default: 86400,
 				description: 'URL validity in seconds (60-2592000, default: 86400 = 1 day)',
 				typeOptions: { minValue: 60, maxValue: 2592000 },
-				displayOptions: { show: { operation: ['signUrl'] } },
+				displayOptions: forOperations('signUrl'),
 			},
 
 			// --- Extract params ---
@@ -190,16 +371,16 @@ export class SnapRender implements INodeType {
 				name: 'extractType',
 				type: 'options',
 				options: [
-					{ name: 'Markdown', value: 'markdown' },
-					{ name: 'Plain Text', value: 'text' },
-					{ name: 'HTML', value: 'html' },
 					{ name: 'Article', value: 'article' },
+					{ name: 'HTML', value: 'html' },
 					{ name: 'Links', value: 'links' },
+					{ name: 'Markdown', value: 'markdown' },
 					{ name: 'Metadata', value: 'metadata' },
+					{ name: 'Plain Text', value: 'text' },
 				],
 				default: 'markdown',
 				description: 'Type of content to extract',
-				displayOptions: { show: { operation: ['extract'] } },
+				displayOptions: forOperations('extract'),
 			},
 			{
 				displayName: 'Extract Options',
@@ -207,15 +388,8 @@ export class SnapRender implements INodeType {
 				type: 'collection',
 				placeholder: 'Add Option',
 				default: {},
-				displayOptions: { show: { operation: ['extract'] } },
+				displayOptions: forOperations('extract'),
 				options: [
-					{
-						displayName: 'Selector',
-						name: 'selector',
-						type: 'string',
-						default: '',
-						description: 'CSS selector to scope extraction to a specific element',
-					},
 					{
 						displayName: 'Block Ads',
 						name: 'blockAds',
@@ -246,6 +420,13 @@ export class SnapRender implements INodeType {
 						description: 'Maximum content length in characters (1-500000)',
 						typeOptions: { minValue: 1, maxValue: 500000 },
 					},
+					{
+						displayName: 'Selector',
+						name: 'selector',
+						type: 'string',
+						default: '',
+						description: 'CSS selector to scope extraction to a specific element',
+					},
 				],
 			},
 
@@ -258,7 +439,7 @@ export class SnapRender implements INodeType {
 				required: true,
 				placeholder: '["https://example.com", "https://example.org"]',
 				description: 'JSON array of URLs to capture (1-50)',
-				displayOptions: { show: { operation: ['batch'] } },
+				displayOptions: forOperations('batch'),
 			},
 
 			// --- Batch Status params ---
@@ -269,8 +450,8 @@ export class SnapRender implements INodeType {
 				default: '',
 				required: true,
 				placeholder: 'e.g. 550e8400-e29b-41d4-a716-446655440000',
-				description: 'The batch job ID returned by Batch Screenshots',
-				displayOptions: { show: { operation: ['getBatchStatus'] } },
+				description: 'The batch job ID returned when the batch was created',
+				displayOptions: forOperations('getBatchStatus'),
 			},
 
 			// --- Webhook params ---
@@ -282,21 +463,21 @@ export class SnapRender implements INodeType {
 				required: true,
 				placeholder: 'https://your-server.com/webhooks/snaprender',
 				description: 'Endpoint URL that will receive webhook deliveries',
-				displayOptions: { show: { operation: ['createWebhook'] } },
+				displayOptions: forOperations('createWebhook'),
 			},
 			{
 				displayName: 'Events',
 				name: 'webhookEvents',
 				type: 'multiOptions',
 				options: [
-					{ name: 'Screenshot Completed', value: 'screenshot.completed' },
-					{ name: 'Quota Warning (80%)', value: 'quota.warning' },
 					{ name: 'Quota Exceeded (100%)', value: 'quota.exceeded' },
+					{ name: 'Quota Warning (80%)', value: 'quota.warning' },
+					{ name: 'Screenshot Completed', value: 'screenshot.completed' },
 				],
 				default: ['screenshot.completed'],
 				required: true,
 				description: 'Events to subscribe to',
-				displayOptions: { show: { operation: ['createWebhook'] } },
+				displayOptions: forOperations('createWebhook'),
 			},
 			{
 				displayName: 'Webhook ID',
@@ -306,17 +487,36 @@ export class SnapRender implements INodeType {
 				required: true,
 				placeholder: 'e.g. 550e8400-e29b-41d4-a716-446655440000',
 				description: 'The webhook ID to operate on',
-				displayOptions: { show: { operation: ['deleteWebhook', 'testWebhook'] } },
+				displayOptions: forOperations('deleteWebhook', 'testWebhook'),
+			},
+			{
+				displayName: 'Return All',
+				name: 'returnAll',
+				type: 'boolean',
+				default: false,
+				description: 'Whether to return all results or only up to a given limit',
+				displayOptions: { show: { ...showV2, resource: ['webhook'], operation: ['getAll'] } },
+			},
+			{
+				displayName: 'Limit',
+				name: 'limit',
+				type: 'number',
+				default: 50,
+				description: 'Max number of results to return',
+				typeOptions: { minValue: 1 },
+				displayOptions: {
+					show: { ...showV2, resource: ['webhook'], operation: ['getAll'], returnAll: [false] },
+				},
 			},
 
-			// --- Screenshot-only params ---
+			// --- Capture params (Take Screenshot, Sign URL, Batch) ---
 			{
 				displayName: 'Full Page',
 				name: 'fullPage',
 				type: 'boolean',
 				default: false,
 				description: 'Whether to capture the entire scrollable page',
-				displayOptions: { show: { operation: ['screenshot', 'signUrl', 'batch'] } },
+				displayOptions: forOperations(...captureOperations),
 			},
 			{
 				displayName: 'Device',
@@ -324,15 +524,15 @@ export class SnapRender implements INodeType {
 				type: 'options',
 				options: [
 					{ name: 'Desktop (Default)', value: '' },
+					{ name: 'iPad Pro', value: 'ipad_pro' },
 					{ name: 'iPhone 14', value: 'iphone_14' },
 					{ name: 'iPhone 15 Pro', value: 'iphone_15_pro' },
-					{ name: 'Pixel 7', value: 'pixel_7' },
-					{ name: 'iPad Pro', value: 'ipad_pro' },
 					{ name: 'MacBook Pro', value: 'macbook_pro' },
+					{ name: 'Pixel 7', value: 'pixel_7' },
 				],
 				default: '',
 				description: 'Device preset for viewport emulation',
-				displayOptions: { show: { operation: ['screenshot', 'signUrl', 'batch'] } },
+				displayOptions: forOperations(...captureOperations),
 			},
 			{
 				displayName: 'Dark Mode',
@@ -340,7 +540,7 @@ export class SnapRender implements INodeType {
 				type: 'boolean',
 				default: false,
 				description: 'Whether to enable dark mode CSS emulation',
-				displayOptions: { show: { operation: ['screenshot', 'signUrl', 'batch'] } },
+				displayOptions: forOperations(...captureOperations),
 			},
 			{
 				displayName: 'Block Ads',
@@ -348,7 +548,7 @@ export class SnapRender implements INodeType {
 				type: 'boolean',
 				default: true,
 				description: 'Whether to block advertisements and trackers',
-				displayOptions: { show: { operation: ['screenshot', 'signUrl', 'batch'] } },
+				displayOptions: forOperations(...captureOperations),
 			},
 			{
 				displayName: 'Block Cookie Banners',
@@ -356,7 +556,7 @@ export class SnapRender implements INodeType {
 				type: 'boolean',
 				default: true,
 				description: 'Whether to remove cookie consent banners',
-				displayOptions: { show: { operation: ['screenshot', 'signUrl', 'batch'] } },
+				displayOptions: forOperations(...captureOperations),
 			},
 			{
 				displayName: 'Additional Options',
@@ -364,31 +564,14 @@ export class SnapRender implements INodeType {
 				type: 'collection',
 				placeholder: 'Add Option',
 				default: {},
-				displayOptions: { show: { operation: ['screenshot', 'signUrl', 'batch'] } },
+				displayOptions: forOperations(...captureOperations),
 				options: [
 					{
-						displayName: 'Width',
-						name: 'width',
-						type: 'number',
-						default: 1280,
-						description: 'Viewport width in pixels (320-3840)',
-						typeOptions: { minValue: 320, maxValue: 3840 },
-					},
-					{
-						displayName: 'Height',
-						name: 'height',
-						type: 'number',
-						default: 800,
-						description: 'Viewport height in pixels (200-10000)',
-						typeOptions: { minValue: 200, maxValue: 10000 },
-					},
-					{
-						displayName: 'Quality',
-						name: 'quality',
-						type: 'number',
-						default: 90,
-						description: 'Image quality for JPEG/WebP (1-100)',
-						typeOptions: { minValue: 1, maxValue: 100 },
+						displayName: 'Click Selector',
+						name: 'clickSelector',
+						type: 'string',
+						default: '',
+						description: 'CSS selector to click before capture',
 					},
 					{
 						displayName: 'Delay',
@@ -399,6 +582,14 @@ export class SnapRender implements INodeType {
 						typeOptions: { minValue: 0, maxValue: 10000 },
 					},
 					{
+						displayName: 'Height',
+						name: 'height',
+						type: 'number',
+						default: 800,
+						description: 'Viewport height in pixels (200-10000)',
+						typeOptions: { minValue: 200, maxValue: 10000 },
+					},
+					{
 						displayName: 'Hide Selectors',
 						name: 'hideSelectors',
 						type: 'string',
@@ -406,11 +597,20 @@ export class SnapRender implements INodeType {
 						description: 'Comma-separated CSS selectors to hide before capture',
 					},
 					{
-						displayName: 'Click Selector',
-						name: 'clickSelector',
-						type: 'string',
-						default: '',
-						description: 'CSS selector to click before capture',
+						displayName: 'Quality',
+						name: 'quality',
+						type: 'number',
+						default: 90,
+						description: 'Image quality for JPEG/WebP (1-100)',
+						typeOptions: { minValue: 1, maxValue: 100 },
+					},
+					{
+						displayName: 'Width',
+						name: 'width',
+						type: 'number',
+						default: 1280,
+						description: 'Viewport width in pixels (320-3840)',
+						typeOptions: { minValue: 320, maxValue: 3840 },
 					},
 				],
 			},
@@ -426,7 +626,7 @@ export class SnapRender implements INodeType {
 				],
 				default: 'binary',
 				description: 'How to return the screenshot',
-				displayOptions: { show: { operation: ['screenshot'] } },
+				displayOptions: forOperations('screenshot'),
 			},
 		],
 	};
@@ -437,7 +637,7 @@ export class SnapRender implements INodeType {
 
 		for (let i = 0; i < items.length; i++) {
 			try {
-				const operation = this.getNodeParameter('operation', i) as string;
+				const operation = resolveOperation(this, i);
 
 				if (operation === 'getUsage') {
 					const response = await this.helpers.httpRequestWithAuthentication.call(
@@ -543,7 +743,10 @@ export class SnapRender implements INodeType {
 						try {
 							urls = JSON.parse(batchUrlsStr) as string[];
 						} catch {
-							throw new Error('URLs must be a valid JSON array of strings');
+							throw new NodeOperationError(this.getNode(), 'URLs must be a valid JSON array of strings', {
+								itemIndex: i,
+								description: 'Example: ["https://example.com", "https://example.org"]',
+							});
 						}
 
 						const body: Record<string, unknown> = {
@@ -610,8 +813,12 @@ export class SnapRender implements INodeType {
 							},
 						);
 						if (Array.isArray(response)) {
-							for (const wh of response) {
-								returnData.push({ json: wh as IDataObject, pairedItem: { item: i } });
+							let webhooks = response as IDataObject[];
+							if (this.getNode().typeVersion >= 2 && !(this.getNodeParameter('returnAll', i) as boolean)) {
+								webhooks = webhooks.slice(0, this.getNodeParameter('limit', i) as number);
+							}
+							for (const wh of webhooks) {
+								returnData.push({ json: wh, pairedItem: { item: i } });
 							}
 						} else {
 							returnData.push({ json: response as IDataObject, pairedItem: { item: i } });
