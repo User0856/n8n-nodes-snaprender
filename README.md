@@ -69,6 +69,7 @@ Nodes added before version 0.2.6 keep their single Operation list and work uncha
 - [SnapRender Website](https://snap-render.com)
 - [API Documentation](https://snap-render.com/docs)
 - [SnapRender on n8n](https://n8n.io/integrations/snaprender)
+- [Setup guide and tested workflows](https://snap-render.com/integrations/n8n)
 - [GitHub](https://github.com/User0856/n8n-nodes-snaprender)
 
 ## License
