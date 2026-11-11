@@ -597,6 +597,14 @@ export class SnapRender implements INodeType {
 						description: 'Comma-separated CSS selectors to hide before capture',
 					},
 					{
+						displayName: 'Lazy Load',
+						name: 'lazyLoad',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to scroll through the page first so lazy-loaded images below the first screen appear. Only applies when Full Page is on. Slower, usually 1-5 seconds more.',
+					},
+					{
 						displayName: 'Quality',
 						name: 'quality',
 						type: 'number',
@@ -691,6 +699,7 @@ export class SnapRender implements INodeType {
 						if (additionalOptions.delay) body.delay = additionalOptions.delay;
 						if (additionalOptions.hideSelectors) body.hide_selectors = additionalOptions.hideSelectors;
 						if (additionalOptions.clickSelector) body.click_selector = additionalOptions.clickSelector;
+						if (fullPage && additionalOptions.lazyLoad === true) body.lazy_load = true;
 
 						const response = await this.helpers.httpRequestWithAuthentication.call(
 							this,
@@ -764,6 +773,7 @@ export class SnapRender implements INodeType {
 						if (additionalOptions.delay) body.delay = additionalOptions.delay;
 						if (additionalOptions.hideSelectors) body.hide_selectors = additionalOptions.hideSelectors;
 						if (additionalOptions.clickSelector) body.click_selector = additionalOptions.clickSelector;
+						if (fullPage && additionalOptions.lazyLoad === true) body.lazy_load = true;
 
 						const response = await this.helpers.httpRequestWithAuthentication.call(
 							this,
@@ -875,6 +885,8 @@ export class SnapRender implements INodeType {
 						qs.hide_selectors = additionalOptions.hideSelectors as string;
 					if (additionalOptions.clickSelector)
 						qs.click_selector = additionalOptions.clickSelector as string;
+					// Only with Full Page, and only when on, so other requests stay exactly as before
+					if (fullPage && additionalOptions.lazyLoad === true) qs.lazy_load = true;
 
 					if (output === 'json') {
 						qs.response_type = 'json';

@@ -40,7 +40,7 @@ Capture any website as PNG, JPEG, WebP, or PDF.
 - **Block Ads**: remove advertisements
 - **Block Cookie Banners**: remove cookie consent popups
 - **Output**: Binary (image file) or JSON (base64 data URI)
-- **Additional Options**: click selector, delay, height, hide selectors, quality, width
+- **Additional Options**: click selector, delay, height, hide selectors, lazy load (with Full Page, scrolls the page first so lazy-loaded images appear), quality, width
 
 ### Screenshot: Check Cache
 
@@ -78,6 +78,7 @@ MIT
 
 ## Changelog
 
+- 0.2.8: Lazy Load option for full-page captures (Take, Sign URL, Batch): scrolls the page first so lazy-loaded images appear
 - 0.2.7: README describes content extraction and links the n8n integration page
 - 0.2.6: operations grouped into Screenshot, Content, Webhook and Account resources (existing workflows unchanged), SVG icons with dark theme variants, alphabetized options, clearer error for invalid batch URL lists
 - 0.2.5: failed requests show SnapRender's own error code and message
