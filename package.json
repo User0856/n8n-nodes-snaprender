@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-snaprender",
-	"version": "0.2.8",
+	"version": "0.2.9",
 	"description": "n8n node for SnapRender API: screenshots, content extraction, batch processing, signed URLs, webhooks. PNG, JPEG, WebP, PDF with device emulation, dark mode, ad blocking.",
 	"license": "MIT",
 	"homepage": "https://snap-render.com",
@@ -26,6 +26,8 @@
 	"scripts": {
 		"build": "n8n-node build && cp nodes/SnapRender/SnapRender.node.json dist/nodes/SnapRender/",
 		"dev": "tsc --watch",
+		"lint": "n8n-node lint",
+		"test": "npm run build && node --test test/",
 		"prepublishOnly": "npm run build"
 	},
 	"files": [

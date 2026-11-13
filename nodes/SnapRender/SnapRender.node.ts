@@ -47,6 +47,62 @@ function findApiError(value: unknown, depth = 0, seen = new Set<unknown>()): Sna
 	return undefined;
 }
 
+interface HttpResponseInfo {
+	status: number;
+	headers: Record<string, unknown>;
+}
+
+/**
+ * Find the HTTP response (status and headers) of a failed request inside an n8n HTTP error. n8n wraps the HTTP
+ * client error in a NodeApiError (cause.response here); the other keys cover older n8n versions. Request config and
+ * socket objects are never visited, so request headers (with the API key) are never read.
+ */
+function findHttpResponse(value: unknown, depth = 0, seen = new Set<unknown>()): HttpResponseInfo | undefined {
+	if (value === null || typeof value !== 'object' || depth > 4 || seen.has(value)) return undefined;
+	seen.add(value);
+	const candidate = value as Record<string, unknown>;
+	const status =
+		typeof candidate.status === 'number'
+			? candidate.status
+			: typeof candidate.statusCode === 'number'
+				? candidate.statusCode
+				: undefined;
+	if (status !== undefined && candidate.headers && typeof candidate.headers === 'object') {
+		return { status, headers: candidate.headers as Record<string, unknown> };
+	}
+	for (const key of ['cause', 'response', 'errorResponse', 'reason', 'error']) {
+		const found = findHttpResponse(candidate[key], depth + 1, seen);
+		if (found) return found;
+	}
+	return undefined;
+}
+
+/** Reads one header, matching the name case-insensitively (works for plain objects and axios header objects). */
+function getHeader(headers: Record<string, unknown> | undefined, name: string): string | undefined {
+	if (!headers) return undefined;
+	for (const key of Object.keys(headers)) {
+		if (key.toLowerCase() !== name) continue;
+		const value = headers[key];
+		const first = Array.isArray(value) ? value[0] : value;
+		return first === undefined || first === null ? undefined : String(first).trim();
+	}
+	return undefined;
+}
+
+/** Retry-After in whole seconds: either a number of seconds or an HTTP date. */
+function parseRetryAfter(value: string | undefined): number | undefined {
+	if (!value) return undefined;
+	if (/^\d+$/.test(value)) return Number(value);
+	const time = Date.parse(value);
+	if (Number.isNaN(time)) return undefined;
+	return Math.max(0, Math.ceil((time - Date.now()) / 1000));
+}
+
+/** A non-negative whole number header value such as X-Remaining-Credits. */
+function parseCount(value: string | undefined): number | undefined {
+	return value && /^\d+$/.test(value) ? Number(value) : undefined;
+}
+
 /** Version 1 shows one flat Operation list. Saved v1 workflows keep these values unchanged. */
 const showV1 = { '@version': [1] };
 /** Version 2 groups the same operations under resources. */
@@ -927,33 +983,62 @@ export class SnapRender implements INodeType {
 							mimeTypes[format] || 'image/png',
 						);
 
+						const json: IDataObject = {
+							url,
+							format,
+							success: true,
+						};
+						// Added only when SnapRender sends it, so the other fields stay exactly as before
+						const remainingCredits = parseCount(
+							getHeader((response as { headers?: Record<string, unknown> }).headers, 'x-remaining-credits'),
+						);
+						if (remainingCredits !== undefined) json.remainingCredits = remainingCredits;
+
 						returnData.push({
-							json: {
-								url,
-								format,
-								success: true,
-							},
+							json,
 							binary: { data: binaryData },
 							pairedItem: { item: i },
 						});
 					}
 				}
 			} catch (error) {
-				const apiError = findApiError(error);
+				const response = findHttpResponse(error);
+				let apiError = findApiError(error);
+				const headerCode = getHeader(response?.headers, 'x-error-code');
+				if (!apiError && headerCode) {
+					// No SnapRender body (for example a body that could not be read): the same code and message are in headers
+					apiError = {
+						code: headerCode,
+						message: getHeader(response?.headers, 'x-error-message') || (error as Error).message,
+						status: response?.status,
+					};
+				}
 				const message = apiError ? `${apiError.code}: ${apiError.message}` : (error as Error).message;
+				const httpCode = apiError?.status ?? response?.status;
+				const retryAfter = parseRetryAfter(getHeader(response?.headers, 'retry-after'));
+
 				if (this.continueOnFail()) {
-					const json: IDataObject = { error: message };
-					if (apiError) {
-						json.errorCode = apiError.code;
-						if (apiError.status) json.httpCode = apiError.status;
+					const fields: IDataObject = {};
+					if (apiError) fields.errorCode = apiError.code;
+					if (httpCode) fields.httpCode = httpCode;
+					if (retryAfter !== undefined) fields.retryAfter = retryAfter;
+					if (this.getNode().onError === 'continueErrorOutput') {
+						// n8n moves an item to the error output only when its json holds nothing but error, message and
+						// details (the HTTP Request node's shape); it then adds the input item's fields. An item.error would
+						// route too, but n8n then replaces the json with the message alone, losing the code and the wait time.
+						const json: IDataObject = { error: message };
+						if (Object.keys(fields).length) json.details = fields;
+						returnData.push({ json, pairedItem: { item: i } });
+					} else {
+						returnData.push({ json: { error: message, ...fields }, pairedItem: { item: i } });
 					}
-					returnData.push({ json, pairedItem: { item: i } });
 				} else if (apiError) {
 					// A fresh error from the API body: NodeApiError hands back an already wrapped error unchanged, which
 					// would keep n8n's generic text for the status code.
 					throw new NodeApiError(this.getNode(), { message, code: apiError.code } as JsonObject, {
 						message,
-						httpCode: apiError.status ? String(apiError.status) : undefined,
+						description: retryAfter !== undefined ? `Retry after ${retryAfter} seconds.` : undefined,
+						httpCode: httpCode ? String(httpCode) : undefined,
 						itemIndex: i,
 					});
 				} else {

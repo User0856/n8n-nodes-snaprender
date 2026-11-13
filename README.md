@@ -39,7 +39,7 @@ Capture any website as PNG, JPEG, WebP, or PDF.
 - **Dark Mode**: enable dark mode CSS emulation
 - **Block Ads**: remove advertisements
 - **Block Cookie Banners**: remove cookie consent popups
-- **Output**: Binary (image file) or JSON (base64 data URI)
+- **Output**: Binary (image file) or JSON (base64 data URI); both include `remainingCredits`, the captures left this month
 - **Additional Options**: click selector, delay, height, hide selectors, lazy load (with Full Page, scrolls the page first so lazy-loaded images appear), quality, width
 
 ### Screenshot: Check Cache
@@ -49,6 +49,13 @@ Check if a screenshot is cached without capturing. Free, doesn't count against q
 ### Account: Get Usage
 
 Get current month's screenshot usage statistics.
+
+### Errors
+
+Failed requests show SnapRender's error code and message, for example `TARGET_UNREACHABLE: The target website could not be reached...`.
+
+- **On Error: Continue**: the item carries `error`, `errorCode`, `httpCode` and, when SnapRender asks you to wait (HTTP 429), `retryAfter` in seconds.
+- **On Error: Continue (using error output)**: failed items go to the error output with the input item's fields, `error`, and the same values under `details`, for example `{{ $json.details.retryAfter }}` in a Wait node.
 
 ### Workflows built with older versions
 
@@ -78,6 +85,7 @@ MIT
 
 ## Changelog
 
+- 0.2.9: failed items go to the error output with "Continue (using error output)"; error items include the HTTP status and, on 429, the wait in seconds (`retryAfter`); binary captures include `remainingCredits`
 - 0.2.8: Lazy Load option for full-page captures (Take, Sign URL, Batch): scrolls the page first so lazy-loaded images appear
 - 0.2.7: README describes content extraction and links the n8n integration page
 - 0.2.6: operations grouped into Screenshot, Content, Webhook and Account resources (existing workflows unchanged), SVG icons with dark theme variants, alphabetized options, clearer error for invalid batch URL lists
